@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { parse } from "@babel/parser";
+import { isJSXClosingElement, isJSXText } from "@babel/types";
 import {
     extract,
     GlobalConfig,
@@ -23,6 +25,7 @@ import {
     TextDocuments,
     TextDocumentSyncKind
 } from "vscode-languageserver/node";
+import { findNode } from "./ast";
 
 const connection = createConnection(ProposedFeatures.all);
 
@@ -192,6 +195,24 @@ connection.onCompletion(
 
             let textResult = "";
             if (!isStylesheet) {
+                if (languageId === 'javascriptreact' || languageId === 'typescriptreact') {
+                    try {
+                        const ast = parse(content, {
+                            plugins: ['jsx', 'typescript'],
+                            errorRecovery: true
+                        })
+                        const cursorLine = _textDocumentPosition.position.line + 1
+                        const cursorChar = _textDocumentPosition.position.character
+                        const node = findNode(ast, cursorLine, cursorChar)
+                        if (!(isJSXText(node) || isJSXClosingElement(node))) {
+                            // Suggest nothing because suggestions are only valid inside JSXText nodes.
+                            return []
+                        }
+                    } catch (e) {
+                        // Suggest nothing when parsing fails.
+                        return []
+                    }
+                }
                 const markup = parseMarkup(abbreviation, emmetConfig);
                 textResult = stringifyMarkup(markup, emmetConfig);
             } else {
